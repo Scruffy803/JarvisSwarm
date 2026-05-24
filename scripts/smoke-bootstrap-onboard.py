@@ -144,9 +144,153 @@ def smoke_onboard_env_writes() -> None:
         raise RuntimeError(f"onboarding did not write expected .env values: {missing}")
 
 
+def smoke_bootstrap_node_setup_installs_slides_dependencies() -> None:
+    sys.path.insert(0, str(ROOT))
+    try:
+        import run_utils
+    finally:
+        sys.path.pop(0)
+
+    calls: list[dict[str, object]] = []
+
+    def run(cmd: list[str], **kwargs: object) -> types.SimpleNamespace:
+        calls.append({"cmd": cmd, **kwargs})
+        if cmd == ["npm", "install", "--legacy-peer-deps"]:
+            modules = Path(str(kwargs["cwd"])) / "node_modules"
+            modules.mkdir(exist_ok=True)
+            (modules / ".package-lock.json").write_text("{}\n", encoding="utf-8")
+            for name in run_utils._REQUIRED_SLIDES_NODE_PACKAGES:
+                (modules / name).mkdir(parents=True, exist_ok=True)
+            return types.SimpleNamespace(returncode=0)
+        if cmd[-3:] == ["install", "chromium", "chromium-headless-shell"]:
+            env = kwargs.get("env")
+            if not isinstance(env, dict):
+                raise RuntimeError("Playwright install did not receive an environment")
+            browsers = Path(str(env["PLAYWRIGHT_BROWSERS_PATH"]))
+            (browsers / "chromium-1000").mkdir(parents=True)
+            (browsers / "chromium_headless_shell-1000").mkdir()
+        return types.SimpleNamespace(returncode=0)
+
+    with tempfile.TemporaryDirectory(prefix="openswarm-node-bootstrap-smoke-") as tmp:
+        repo = Path(tmp)
+        (repo / "package.json").write_text('{"dependencies":{"playwright":"^1.59.1"}}\n', encoding="utf-8")
+        modules = repo / "node_modules"
+        modules.mkdir()
+        (modules / ".package-lock.json").write_text("{}\n", encoding="utf-8")
+        present = ("dom-to-pptx", "playwright", "pptxgenjs", "react", "react-dom", "react-icons")
+        for name in present:
+            (modules / name).mkdir()
+
+        with (
+            patch.object(
+                run_utils.shutil,
+                "which",
+                lambda name: "/usr/local/bin/npx" if name == "npx" else None,
+            ),
+            patch.object(run_utils.subprocess, "run", run),
+        ):
+            if not run_utils._ensure_node_dependencies(repo, "npm"):
+                raise RuntimeError("bootstrap reported failed Node setup for successful commands")
+
+        expected = [
+            ["npm", "install", "--legacy-peer-deps"],
+            [
+                "/usr/local/bin/npx",
+                "-y",
+                "playwright",
+                "install",
+                "chromium",
+                "chromium-headless-shell",
+            ],
+        ]
+        actual = [call["cmd"] for call in calls]
+        if actual != expected:
+            raise RuntimeError(f"bootstrap ran unexpected Node setup commands: {actual}")
+
+        missing = [
+            name
+            for name in run_utils._REQUIRED_SLIDES_NODE_PACKAGES
+            if not (repo / "node_modules" / name).exists()
+        ]
+        if missing:
+            raise RuntimeError(f"bootstrap left required Slides npm modules missing: {missing}")
+
+        browsers = repo / ".playwright-browsers"
+        browser_prefixes = {path.name.split("-")[0] for path in browsers.iterdir()}
+        if {"chromium", "chromium_headless_shell"} - browser_prefixes:
+            raise RuntimeError(f"bootstrap left required Node Playwright browser assets missing: {sorted(browser_prefixes)}")
+
+        for call in calls:
+            if call.get("cwd") != str(repo):
+                raise RuntimeError(f"bootstrap ran Node setup from wrong cwd: {calls}")
+
+        env = calls[1].get("env")
+        if not isinstance(env, dict):
+            raise RuntimeError(f"bootstrap did not pass an environment to Playwright: {calls[1]}")
+        if env.get("PLAYWRIGHT_BROWSERS_PATH") != str(repo / ".playwright-browsers"):
+            raise RuntimeError(f"bootstrap set wrong Playwright browser path: {env.get('PLAYWRIGHT_BROWSERS_PATH')}")
+
+        sink = io.StringIO()
+        with (
+            patch.object(run_utils.shutil, "which", lambda _name: None),
+            patch("sys.stdout", sink),
+        ):
+            if run_utils._ensure_node_playwright_browsers(repo):
+                raise RuntimeError("bootstrap reported successful Node Playwright setup without npx")
+        if "npx was not found" not in sink.getvalue():
+            raise RuntimeError("bootstrap did not warn when npx was unavailable")
+
+        def fail_run(_cmd: list[str], **_kwargs: object) -> types.SimpleNamespace:
+            return types.SimpleNamespace(returncode=7)
+
+        (repo / "node_modules" / "sharp").rmdir()
+        sink = io.StringIO()
+        with (
+            patch.object(run_utils.subprocess, "run", fail_run),
+            patch.object(
+                run_utils.shutil,
+                "which",
+                lambda name: "/usr/local/bin/npx" if name == "npx" else None,
+            ),
+            patch("sys.stdout", sink),
+        ):
+            if run_utils._ensure_node_dependencies(repo, "npm"):
+                raise RuntimeError("bootstrap reported successful Node setup after command failures")
+        if "OpenSwarm will continue" not in sink.getvalue():
+            raise RuntimeError("bootstrap did not continue visibly after failed Node setup")
+
+    invoked: list[tuple[Path, str]] = []
+
+    def which(name: str) -> str | None:
+        if name == "npm":
+            return "npm"
+        if name in {"soffice", "soffice.com", "pdftoppm"}:
+            return f"/usr/bin/{name}"
+        return None
+
+    replacements = {
+        "dotenv": module("dotenv"),
+        "rich": module("rich"),
+        "questionary": module("questionary"),
+        "agency_swarm": module("agency_swarm"),
+    }
+    with (
+        swapped_modules(replacements),
+        patch.object(run_utils.shutil, "which", which),
+        patch.object(run_utils.subprocess, "check_call", lambda *_args, **_kwargs: None),
+        patch.object(run_utils, "_ensure_node_dependencies", lambda repo, npm: invoked.append((repo, npm))),
+        patch.dict(os.environ, {"AGENTSWARM_BIN": "test-bin"}),
+    ):
+        run_utils._bootstrap()
+
+    if invoked != [(ROOT, "npm")]:
+        raise RuntimeError(f"bootstrap did not invoke Node dependency setup for package.json: {invoked}")
+
+
 def main() -> int:
     smoke_swarm_import_skips_bootstrap()
     smoke_onboard_env_writes()
+    smoke_bootstrap_node_setup_installs_slides_dependencies()
     print("OpenSwarm import bootstrap and onboarding smoke passed")
     return 0
 

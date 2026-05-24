@@ -151,21 +151,82 @@ def _resolve_tui_binary(repo: Path, download: bool) -> Path | None:
     return None
 
 
-def _ensure_node_playwright_browsers(repo: Path) -> None:
+_REQUIRED_SLIDES_NODE_PACKAGES = (
+    "dom-to-pptx",
+    "playwright",
+    "pptxgenjs",
+    "react",
+    "react-dom",
+    "react-icons",
+    "sharp",
+)
+
+
+def _warn_slides_setup(message: str) -> None:
+    print(
+        f"Warning: {message}\n"
+        "  OpenSwarm will continue, but Slides Agent export features may be unavailable.\n"
+    )
+
+
+def _run_optional_node_command(
+    cmd: list[str],
+    repo: Path,
+    label: str,
+    env: dict[str, str] | None = None,
+) -> bool:
+    try:
+        result = subprocess.run(cmd, cwd=str(repo), env=env)
+    except Exception as exc:
+        _warn_slides_setup(f"{label} failed: {exc}")
+        return False
+    if result.returncode != 0:
+        _warn_slides_setup(f"{label} exited with code {result.returncode}")
+        return False
+    return True
+
+
+def _ensure_node_playwright_browsers(repo: Path) -> bool:
     """Install Node Playwright browsers where the HTML-to-PPTX runner looks for them."""
-    cli = repo / "node_modules" / "playwright" / "cli.js"
-    if not cli.exists():
-        return
+    npx = shutil.which("npx")
+    if not npx:
+        _warn_slides_setup(
+            "npm is available but npx was not found; cannot install Node Playwright browsers"
+        )
+        return False
 
     env = os.environ.copy()
     env["PLAYWRIGHT_BROWSERS_PATH"] = str(repo / ".playwright-browsers")
-    subprocess.check_call(
-        ["node", str(cli), "install", "chromium"],
-        cwd=str(repo),
+    return _run_optional_node_command(
+        [npx, "-y", "playwright", "install", "chromium", "chromium-headless-shell"],
+        repo,
+        "Node Playwright browser install",
         env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
     )
+
+
+def _ensure_node_dependencies(repo: Path, npm: str) -> bool:
+    _node_modules = repo / "node_modules"
+    _pkg_lock = repo / "package-lock.json"
+    _npm_marker = _node_modules / ".package-lock.json"
+    _need_npm = (
+        not _node_modules.exists()
+        or not _npm_marker.exists()
+        or (_pkg_lock.exists() and _pkg_lock.stat().st_mtime > _npm_marker.stat().st_mtime)
+        or any(not (_node_modules / name).exists() for name in _REQUIRED_SLIDES_NODE_PACKAGES)
+    )
+    _npm_ok = True
+    if _need_npm:
+        print("Installing Node.js dependencies, please wait…\n")
+        _npm_ok = _run_optional_node_command(
+            [npm, "install", "--legacy-peer-deps"],
+            repo,
+            "Node.js dependency install",
+        )
+        if _npm_ok:
+            print("\nDone.\n")
+    _browsers_ok = _ensure_node_playwright_browsers(repo)
+    return _npm_ok and _browsers_ok
 
 
 def _uv_env() -> dict[str, str]:
@@ -254,25 +315,14 @@ def _bootstrap() -> None:
                 "  Install it from: https://poppler.freedesktop.org\n"
             )
 
-    # Install Node.js dependencies if node_modules is missing or outdated.
+    # Install Node.js dependencies if node_modules is missing, incomplete, or outdated.
     _npm = shutil.which("npm")
     if _npm and (_repo / "package.json").exists():
-        _node_modules = _repo / "node_modules"
-        _pkg_lock = _repo / "package-lock.json"
-        _npm_marker = _node_modules / ".package-lock.json"
-        _need_npm = (
-            not _node_modules.exists()
-            or not _npm_marker.exists()
-            or (_pkg_lock.exists() and _pkg_lock.stat().st_mtime > _npm_marker.stat().st_mtime)
+        _ensure_node_dependencies(_repo, _npm)
+    elif (_repo / "package.json").exists():
+        _warn_slides_setup(
+            "npm was not found; cannot install Slides Agent Node.js dependencies"
         )
-        if _need_npm:
-            print("Installing Node.js dependencies, please wait…\n")
-            subprocess.check_call([_npm, "install"], cwd=str(_repo))
-            print("\nDone.\n")
-        try:
-            _ensure_node_playwright_browsers(_repo)
-        except Exception:
-            pass
 
     # Download the OpenSwarm TUI binary from GitHub Releases if missing.
     if not os.getenv("AGENTSWARM_BIN"):

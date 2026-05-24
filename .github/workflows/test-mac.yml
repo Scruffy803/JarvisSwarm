@@ -50,12 +50,12 @@ jobs:
           AGENTSWARM_PRODUCT_TUI_LOGO_RIGHT: '["","███████╗██╗    ██╗ █████╗ ██████╗ ███╗   ███╗","██╔════╝██║    ██║██╔══██╗██╔══██╗████╗ ████║","███████╗██║ █╗ ██║███████║██████╔╝██╔████╔██║","╚════██║██║███╗██║██╔══██║██╔══██╗██║╚██╔╝██║","███████║╚███╔███╔╝██║  ██║██║  ██║██║ ╚═╝ ██║","╚══════╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝"]'
           AGENTSWARM_PRODUCT_WORDMARK_LINES: '[""," ██████╗ ██████╗ ███████╗███╗   ██╗ ███████╗██╗    ██╗ █████╗ ██████╗ ███╗   ███╗","██╔═══██╗██╔══██╗██╔════╝████╗  ██║ ██╔════╝██║    ██║██╔══██╗██╔══██╗████╗ ████║","██║   ██║██████╔╝█████╗  ██╔██╗ ██║ ███████╗██║ █╗ ██║███████║██████╔╝██╔████╔██║","██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║ ╚════██║██║███╗██║██╔══██╗██╔══██╗██║╚██╔╝██║","╚██████╔╝██║     ███████╗██║ ╚████║ ███████║╚███╔███╔╝██║  ██║██║  ██║██║ ╚═╝ ██║"," ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝ ╚══════╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝"]'
           AGENTSWARM_PRODUCT_PYTHON_ENVIRONMENT: standalone
-          AGENTSWARM_PRODUCT_VERSION: 1.0.1-rc.5
+          AGENTSWARM_PRODUCT_VERSION: 1.0.1-rc.6
         run: |
           bun install
           cd packages/opencode
           bun run script/build.ts --single --skip-install
-          test "$(./dist/agentswarm-cli-darwin-arm64/bin/agentswarm --version)" = "1.0.1-rc.5"
+          test "$(./dist/agentswarm-cli-darwin-arm64/bin/agentswarm --version)" = "1.0.1-rc.6"
       - name: Test startup
         shell: bash
         run: |
