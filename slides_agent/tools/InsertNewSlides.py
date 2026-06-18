@@ -50,7 +50,7 @@ class _PlanResponse(BaseModel):
 
 
 def _get_caller_info(tool) -> "tuple[AsyncOpenAI | None, str | None]":
-    """Return (openai_client, model_name_str) from the calling agent's context."""
+    """Return (openai_client, model_name_str, model_obj) from the calling agent's context."""
     ctx = getattr(tool, "_context", None)
     master = getattr(ctx, "context", None)
     agent_name = getattr(master, "current_agent_name", None)
@@ -63,11 +63,10 @@ def _get_caller_info(tool) -> "tuple[AsyncOpenAI | None, str | None]":
         if isinstance(maybe, AsyncOpenAI):
             client = maybe
             break
-    # model name: agent.model is a string when set directly, otherwise read .model on the object
     model_name = model if isinstance(model, str) else getattr(model, "model", None)
     if not isinstance(model_name, str):
         model_name = None
-    return client, model_name
+    return client, model_name, model
 
 
 class _CodexResponsesModel:
@@ -149,20 +148,22 @@ def _make_planner_agent(tool=None) -> "tuple[Agent, bool]":
     """Create a fresh, stateless agent instance for one InsertNewSlides call.
 
     Model priority:
-    1. ANTHROPIC_API_KEY in env → Claude Sonnet 4.6 (best planning quality)
-    2. Calling agent's OpenAI client (browser auth / per-request ClientConfig)
-    3. AsyncOpenAI() default (env vars)
+    1. ANTHROPIC_API_KEY in env → Claude Sonnet 4.6 (explicit key)
+    2. Non-OpenAI DEFAULT_MODEL (e.g. anthropic/claude-*) → LiteLLM
+    3. Calling agent's OpenAI client (browser auth / per-request ClientConfig)
+    4. AsyncOpenAI() default (env vars)
 
     Returns (agent, is_codex).
     """
     anthropic_key = os.getenv("ANTHROPIC_API_KEY")
     is_codex = False
+    model = None
     if anthropic_key:
         model = LitellmModel(model=_PLANNER_MODEL_CLAUDE, api_key=anthropic_key)
     else:
         from agents import OpenAIResponsesModel
         from openai import AsyncOpenAI
-        caller_client, caller_model_name = tool and _get_caller_info(tool) or (None, None)
+        caller_client, caller_model_name, caller_model_obj = tool and _get_caller_info(tool) or (None, None, None)
         if caller_client is None:
             # When the calling agent uses a string model its client isn't on the model
             # object. Fall back to the SDK global default client (set by Codex browser
@@ -172,37 +173,35 @@ def _make_planner_agent(tool=None) -> "tuple[Agent, bool]":
                 caller_client = _sdk_default()
             except Exception:
                 pass
-        if caller_client:
-            # Create a fresh client with the same credentials — the caller's client is
-            # bound to FastAPI's event loop and cannot be reused in asyncio.run() threads.
-            # Also copy any non-standard headers (e.g. ChatGPT-Account-Id for Codex auth).
-            _STD_HDR_PREFIXES = (
-                "accept", "content-type", "user-agent",
-                "x-stainless-", "openai-",
-            )
-            extra_headers = {
-                k: v for k, v in caller_client.default_headers.items()
-                if not any(k.lower().startswith(p) for p in _STD_HDR_PREFIXES)
-            }
-            client = AsyncOpenAI(
-                api_key=caller_client.api_key,
-                base_url=str(caller_client.base_url),
-                default_headers=extra_headers if extra_headers else None,
-            )
+        if caller_model_obj is not None and not isinstance(caller_model_obj, str) and caller_client is None:
+            # Non-OpenAI provider (e.g. LiteLLM/Anthropic) — reuse the caller's model directly
+            model = caller_model_obj
         else:
-            client = AsyncOpenAI()
-        # Use the calling agent's model name so the sub-agent uses whatever model was
-        # selected in the TUI — falling back to DEFAULT_MODEL / "gpt-5.2" only when
-        # the caller's model can't be determined.
-        model_name = caller_model_name or get_default_model()
-        # Detect Codex from the resolved client base_url so we handle both explicit
-        # clients (OpenAIResponsesModel agent) and env-var-based clients (string model
-        # agents where _get_caller_info returns None but OPENAI_BASE_URL is set).
-        is_codex = not str(client.base_url).startswith("https://api.openai.com")
-        if is_codex:
-            model = _CodexResponsesModel(model=model_name, openai_client=client)
-        else:
-            model = OpenAIResponsesModel(model=model_name, openai_client=client)
+            if caller_client:
+                # Create a fresh client with the same credentials — the caller's client is
+                # bound to FastAPI's event loop and cannot be reused in asyncio.run() threads.
+                # Also copy any non-standard headers (e.g. ChatGPT-Account-Id for Codex auth).
+                _STD_HDR_PREFIXES = (
+                    "accept", "content-type", "user-agent",
+                    "x-stainless-", "openai-",
+                )
+                extra_headers = {
+                    k: v for k, v in caller_client.default_headers.items()
+                    if not any(k.lower().startswith(p) for p in _STD_HDR_PREFIXES)
+                }
+                client = AsyncOpenAI(
+                    api_key=caller_client.api_key,
+                    base_url=str(caller_client.base_url),
+                    default_headers=extra_headers if extra_headers else None,
+                )
+            else:
+                client = AsyncOpenAI()
+            model_name = caller_model_name or get_default_model()
+            is_codex = not str(client.base_url).startswith("https://api.openai.com")
+            if is_codex:
+                model = _CodexResponsesModel(model=model_name, openai_client=client)
+            else:
+                model = OpenAIResponsesModel(model=model_name, openai_client=client)
     agent = Agent(
         name="Slide Planner",
         description="Creates structured slide outline plans.",
