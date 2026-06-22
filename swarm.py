@@ -16,11 +16,13 @@ def _configure_runtime() -> None:
         apply_ipython_composio_context_patch,
     )
     from patches.patch_utf8_file_reads import apply_utf8_file_read_patch
+    from patches.patch_openrouter_responses_model import apply_openrouter_responses_model_patch
 
     load_dotenv(dotenv_path=_openswarm_state_root() / ".env")
 
     apply_utf8_file_read_patch()
     apply_ipython_composio_context_patch()
+    apply_openrouter_responses_model_patch()
 
     _tracing_key = os.getenv("OPENAI_API_KEY")
     if _tracing_key:

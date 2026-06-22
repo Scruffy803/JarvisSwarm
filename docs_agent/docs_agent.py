@@ -1,10 +1,10 @@
 from datetime import datetime, timezone
 from pathlib import Path
 
-from agency_swarm import Agent, ModelSettings, Agency
-from agency_swarm.tools import IPythonInterpreter, WebSearchTool
+from agency_swarm import ModelSettings, Agency
+from agency_swarm.tools import IPythonInterpreter
 from openai.types.shared import Reasoning
-from shared_tools import CopyFile
+from shared_tools import CopyFile, HostedToolAgent, WebSearch
 
 from config import get_default_model, is_openai_provider
 
@@ -31,8 +31,8 @@ def _build_instructions() -> str:
     )
 
 
-def create_docs_agent() -> Agent:
-    return Agent(
+def create_docs_agent() -> HostedToolAgent:
+    return HostedToolAgent(
         name="Docs Agent",
         description="Professional Document Engineer specializing in creating, editing, and converting files to multiple formats (PDF, Markdown, TXT, DOCX).",
         instructions=_build_instructions(),
@@ -43,7 +43,7 @@ def create_docs_agent() -> Agent:
             reasoning=Reasoning(effort="medium", summary="auto") if is_openai_provider() else None,
             response_include=["web_search_call.action.sources"] if is_openai_provider() else None,
         ),
-        tools=[WebSearchTool(), IPythonInterpreter, CopyFile],
+        tools=[WebSearch, IPythonInterpreter, CopyFile],
         conversation_starters=[
             "Draft Week 34 client status report with a table and export as PDF.",
             "Create a one-page AI chatbot proposal and export as DOCX.",

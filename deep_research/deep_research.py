@@ -1,18 +1,19 @@
-from agency_swarm import Agent, ModelSettings
-from agency_swarm.tools import WebSearchTool, IPythonInterpreter
+from agency_swarm import ModelSettings
+from agency_swarm.tools import IPythonInterpreter
 from openai.types.shared import Reasoning
 from virtual_assistant.tools.ScholarSearch import ScholarSearch
 
 from config import get_default_model, is_openai_provider
+from shared_tools import HostedToolAgent, WebSearch
 
 
-def create_deep_research() -> Agent:
-    return Agent(
+def create_deep_research() -> HostedToolAgent:
+    return HostedToolAgent(
         name="Deep Research Agent",
         description="Comprehensive deep research agent that conducts thorough research on any topic.",
         instructions="./instructions.md",
         files_folder="./files",
-        tools=[WebSearchTool(), ScholarSearch, IPythonInterpreter],
+        tools=[WebSearch, ScholarSearch, IPythonInterpreter],
         model=get_default_model(),
         model_settings=ModelSettings(
             reasoning=Reasoning(effort="high", summary="auto") if is_openai_provider() else None,

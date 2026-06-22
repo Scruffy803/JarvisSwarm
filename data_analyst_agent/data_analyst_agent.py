@@ -1,28 +1,28 @@
 import os
-from agency_swarm import Agent, ModelSettings
+from agency_swarm import ModelSettings
 from openai.types.shared.reasoning import Reasoning
 from agency_swarm.tools import (
-    WebSearchTool,
     PersistentShellTool,
     IPythonInterpreter,
     LoadFileAttachment,
 )
-from shared_tools import CopyFile, ExecuteTool, FindTools, ManageConnections, SearchTools
+from shared_tools import CopyFile, ExecuteTool, FindTools, HostedToolAgent, ManageConnections, SearchTools, WebSearch
 
 from config import get_default_model, is_openai_provider
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 instructions_path = os.path.join(current_dir, "instructions.md")
 
-def create_data_analyst() -> Agent:
-    return Agent(
+
+def create_data_analyst() -> HostedToolAgent:
+    return HostedToolAgent(
         name="Data Analyst",
         description="Advanced data analytics agent that generates charts and provides actionable insights.",
         instructions=instructions_path,
         tools_folder=os.path.join(current_dir, "tools"),
         model=get_default_model(),
         tools=[
-            WebSearchTool(),
+            WebSearch,
             PersistentShellTool,
             IPythonInterpreter,
             LoadFileAttachment,

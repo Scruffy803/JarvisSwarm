@@ -1,6 +1,5 @@
-from agency_swarm import Agent, ModelSettings
+from agency_swarm import ModelSettings
 from agency_swarm.tools import (
-    WebSearchTool,
     PersistentShellTool,
     IPythonInterpreter,
 )
@@ -8,7 +7,7 @@ from openai.types.shared import Reasoning
 
 from config import get_default_model, is_openai_provider
 from run_utils import _load_openswarm_dotenv
-from shared_tools import CopyFile, ExecuteTool, FindTools, ManageConnections, SearchTools
+from shared_tools import CopyFile, ExecuteTool, FindTools, HostedToolAgent, ManageConnections, SearchTools, WebSearch
 
 _load_openswarm_dotenv()
 
@@ -16,8 +15,8 @@ _load_openswarm_dotenv()
 IPythonInterpreter.__name__ = "ProgrammaticToolCalling"
 
 
-def create_virtual_assistant() -> Agent:
-    return Agent(
+def create_virtual_assistant() -> HostedToolAgent:
+    return HostedToolAgent(
         name="General Agent",
         description="Your virtual assistant that connects to 10000+ external systems.",
         instructions="./instructions.md",
@@ -29,7 +28,7 @@ def create_virtual_assistant() -> Agent:
             response_include=["web_search_call.action.sources"] if is_openai_provider() else None,
         ),
         tools=[
-            WebSearchTool(),
+            WebSearch,
             PersistentShellTool,
             IPythonInterpreter,
             CopyFile,

@@ -15,6 +15,7 @@ from typing import Literal
 import os
 from agency_swarm import Agent, ModelSettings, Reasoning
 from agency_swarm.tools import BaseTool
+from agency_swarm.utils.openrouter import OPENROUTER_BASE_URL, build_openrouter_chat_model
 from openai import AsyncOpenAI
 from agents.extensions.models.litellm_model import LitellmModel
 from pydantic import BaseModel, Field, ValidationError
@@ -157,6 +158,7 @@ def _make_planner_agent(tool=None) -> "tuple[Agent, bool]":
     """
     anthropic_key = os.getenv("ANTHROPIC_API_KEY")
     is_codex = False
+    is_openrouter = False
     model = None
     if anthropic_key:
         model = LitellmModel(model=_PLANNER_MODEL_CLAUDE, api_key=anthropic_key)
@@ -197,8 +199,11 @@ def _make_planner_agent(tool=None) -> "tuple[Agent, bool]":
             else:
                 client = AsyncOpenAI()
             model_name = caller_model_name or get_default_model()
-            is_codex = not str(client.base_url).startswith("https://api.openai.com")
-            if is_codex:
+            is_openrouter = str(client.base_url).rstrip("/") == OPENROUTER_BASE_URL.rstrip("/")
+            is_codex = not is_openrouter and not str(client.base_url).startswith("https://api.openai.com")
+            if is_openrouter:
+                model = build_openrouter_chat_model(model_name, openai_client=client)
+            elif is_codex:
                 model = _CodexResponsesModel(model=model_name, openai_client=client)
             else:
                 model = OpenAIResponsesModel(model=model_name, openai_client=client)
@@ -213,8 +218,8 @@ def _make_planner_agent(tool=None) -> "tuple[Agent, bool]":
         model=model,
         output_type=_PlanResponse,
         model_settings=ModelSettings(
-            reasoning=Reasoning(effort="high", summary="auto"),
-            verbosity=None if is_codex else "medium",
+            reasoning=Reasoning(effort="high", summary="auto" if not is_openrouter else None),
+            verbosity=None if (is_codex or is_openrouter) else "medium",
             store=False if is_codex else None,
         ),
     )
