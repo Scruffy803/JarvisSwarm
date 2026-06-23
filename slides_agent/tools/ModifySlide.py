@@ -267,25 +267,6 @@ class _CodexResponsesModel:
         return cls._get_cls()(model=model, openai_client=openai_client)
 
 
-def _register_sub_agent_usage(tool, agent_model, result) -> None:
-    """Push sub-agent raw API responses into the master context for UI cost tracking."""
-    try:
-        from agency_swarm.utils.model_utils import get_usage_tracking_model_name
-        raw_responses = getattr(result, "raw_responses", None) or []
-        if not raw_responses:
-            return
-        ctx = getattr(tool, "_context", None)
-        master = getattr(ctx, "context", None)
-        registry = getattr(master, "_sub_agent_raw_responses", None)
-        if registry is None:
-            return
-        model_name = get_usage_tracking_model_name(agent_model)
-        for resp in raw_responses:
-            registry.append((model_name, resp))
-    except Exception:
-        pass
-
-
 async def _agent_get_response(
     agent: Agent,
     prompt: str,
@@ -316,11 +297,8 @@ async def _agent_get_response(
         fo = getattr(result, "final_output", None) if result is not None else None
         if not fo and text_deltas:
             assembled = "".join(text_deltas)
-            _raw = getattr(result, "raw_responses", []) or []
-
             class _R:
                 final_output = assembled
-                raw_responses = _raw
 
             return _R()
         return result
@@ -711,7 +689,6 @@ class ModifySlide(BaseTool):
                     last_validation_error = f"Sub-agent error (attempt {attempt}): {exc}\n{traceback.format_exc()}"
                     continue
                 sub_results.append(final_result)
-                _register_sub_agent_usage(self, writer.model, final_result)
 
                 # No result object means the framework swallowed an API-level error
                 # (e.g. rate limit).  Extract whatever error detail is available.
