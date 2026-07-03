@@ -1,6 +1,6 @@
 import os
 
-from run_utils import _bootstrap, _openswarm_state_root, _preload_agentswarm_bin
+from run_utils import _bootstrap, _configure_product_env, _openswarm_state_root, _preload_agentswarm_bin
 
 _RUNTIME_CONFIGURED = False
 
@@ -40,6 +40,7 @@ _configure_runtime()
 
 def create_agency(load_threads_callback=None):
     _configure_runtime()
+    _configure_product_env()
 
     from agency_swarm import Agency
     from agency_swarm.tools import Handoff, SendMessage
