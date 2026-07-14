@@ -310,7 +310,10 @@ def run_tui_smoke(
             if "failedtostartresponsestream" in lower_compact or "cannotreachagency-swarmbackend" in lower_compact:
                 raise RuntimeError("OpenSwarm backend became unreachable during smoke test")
 
-            if not sent_confirm and "Createalocal`.venv`inthisproject?" in compact_plain:
+            if not sent_confirm and (
+                "Createalocal`.venv`inthisproject?" in compact_plain
+                or "Createanisolatedprojectenvironment?" in compact_plain
+            ):
                 write(master_fd, "\r")
                 sent_confirm = True
 
@@ -320,7 +323,9 @@ def run_tui_smoke(
                 write(master_fd, "/agents\r")
                 sent_agents_command = True
 
-            if sent_agents_command and not verified_agents and "Selectswarm" in compact_plain:
+            if sent_agents_command and not verified_agents and (
+                "Selectswarm" in compact_plain or "Selectagent" in compact_plain
+            ):
                 missing = [term for term, packed in zip(expected_agent_terms, expected_agent_compact) if packed not in compact_plain]
                 if not missing:
                     verified_agents = True
