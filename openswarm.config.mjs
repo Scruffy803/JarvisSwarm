@@ -162,6 +162,7 @@ export function getProductEnv(opts = {}) {
     AGENTSWARM_PRODUCT_STARTER_FOLDER: product.starterFolder,
     AGENTSWARM_PRODUCT_ENTRY_FILES: product.entryFiles,
     AGENTSWARM_PRODUCT_SKIP_POST_AUTH_MODEL_SELECTION: "true",
+    AGENTSWARM_PRODUCT_HIDE_CONNECT: "true",
     AGENTSWARM_PRODUCT_TUI_LOGO_LEFT: JSON.stringify(productTuiLogoLeft),
     AGENTSWARM_PRODUCT_TUI_LOGO_RIGHT: JSON.stringify(productTuiLogoRight),
     AGENTSWARM_PRODUCT_WORDMARK_LINES: JSON.stringify(productWordmarkLines),
