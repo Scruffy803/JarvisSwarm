@@ -1,3 +1,4 @@
+import inspect
 import os
 
 from composio import Composio
@@ -10,7 +11,13 @@ _load_openswarm_dotenv()
 _composio_clients: dict[str, Composio] = {}
 
 
+def _refresh_runtime_env() -> None:
+    """Reload add-on keys written through the TUI into the running process."""
+    _load_openswarm_dotenv(override=True)
+
+
 def get_composio_user_id() -> str | None:
+    _refresh_runtime_env()
     for key in ("COMPOSIO_USER_ID", "USER_ID"):
         value = os.getenv(key)
         if value:
@@ -19,6 +26,7 @@ def get_composio_user_id() -> str | None:
 
 
 def get_composio_client() -> Composio | None:
+    _refresh_runtime_env()
     api_key = os.getenv("COMPOSIO_API_KEY")
     if not api_key:
         return None
@@ -37,12 +45,17 @@ def execute_composio_tool(tool_name: str, arguments: dict):
     if not user_id:
         return {"error": "COMPOSIO_USER_ID is not set."}
 
-    return composio.tools.execute(
-        tool_name,
-        user_id=user_id,
-        arguments=arguments,
-        dangerously_skip_version_check=True,
-    )
+    kwargs = {"user_id": user_id, "arguments": arguments}
+    # composio>=0.9.0 checks tool versions on execute; skip it when supported.
+    # Older releases (0.8.x) have no such check and reject the keyword.
+    try:
+        parameters = inspect.signature(composio.tools.execute).parameters
+    except (TypeError, ValueError):
+        parameters = {}
+    if "dangerously_skip_version_check" in parameters:
+        kwargs["dangerously_skip_version_check"] = True
+
+    return composio.tools.execute(tool_name, **kwargs)
 
 
 def get_composio_tools(**kwargs):

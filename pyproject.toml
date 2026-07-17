@@ -1,19 +1,19 @@
 [project]
 name = "open-swarm"
 description = "An open-source multi-agent AI team built on Agency Swarm and the OpenAI Agents SDK"
-version = "1.1.0"
+version = "1.1.1"
 license = { text = "MIT" }
 keywords = ["agency-swarm", "openai", "multi-agent", "open-source", "openswarm"]
 requires-python = ">=3.12"
 dependencies = [
-    "agency-swarm[fastapi,jupyter,litellm]==1.10.4",
+    "agency-swarm[fastapi,jupyter,litellm]==1.10.5",
     "questionary>=2.0.0",
     "python-dotenv",
     "rich",
     "fastapi",
     "uvicorn",
-    "composio==0.8.0",
-    "composio-openai-agents==0.8.0",
+    "composio==0.15.0",
+    "composio-openai-agents==0.15.0",
     "pytz",
     # Data analysis
     "pandas>=2.0.0",
