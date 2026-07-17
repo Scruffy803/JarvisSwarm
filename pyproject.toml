@@ -12,8 +12,8 @@ dependencies = [
     "rich",
     "fastapi",
     "uvicorn",
-    "composio==0.8.0",
-    "composio-openai-agents==0.8.0",
+    "composio==0.15.0",
+    "composio-openai-agents==0.15.0",
     "pytz",
     # Data analysis
     "pandas>=2.0.0",

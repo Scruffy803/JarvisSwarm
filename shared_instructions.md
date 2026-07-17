@@ -40,8 +40,8 @@ Agents (except for Agent Swarm agent) can extend their functionality by adding c
 ### 5.3 Advanced queries
 
 - For standard tasks, prefer shared tools (`ManageConnections`, `SearchTools`, `FindTools`, `ExecuteTool`).
-- If `ProgrammaticToolCalling` is unavoidable, direct calls to `composio.tools.execute(...)` and `composio.tools.get(...)` are allowed.
-- In `ProgrammaticToolCalling`, `composio` (the injected Composio client object for `tools.get`/`tools.execute`) and `user_id` are automatically available at runtime.
+- If `ProgrammaticToolCalling` is unavoidable, use `execute_composio_tool(...)` for execution and `composio.tools.get(...)` for discovery.
+- In `ProgrammaticToolCalling`, `execute_composio_tool`, `composio` (the injected Composio client object for `tools.get`), and `user_id` are automatically available at runtime.
 Do not import them manually unless explicitly needed for compatibility.
 
 ```python
@@ -51,15 +51,13 @@ tools = composio.tools.get(
     limit=5,
 )
 
-result = composio.tools.execute(
-    tool_name="GMAIL_SEND_EMAIL",
-    user_id=user_id,
-    arguments={
+result = execute_composio_tool(
+    "GMAIL_SEND_EMAIL",
+    {
         "to": ["user@example.com"],
         "subject": "Hello",
         "body": "Hi from agent",
     },
-    dangerously_skip_version_check=True,
 )
 print(result)
 ```
